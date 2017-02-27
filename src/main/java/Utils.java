@@ -2,18 +2,25 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 /**
  * Created by zhaoxiaoguang on 2017/2/27.
  */
 public class Utils {
+    static SimpleDateFormat dateformat=new SimpleDateFormat("yyyy-MM-dd");
+    public static Date parseDate(String str) {
+        try {
+            return dateformat.parse(str);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
     /**
      * 复制文件
-     *
-     * @param srcPath
-     *            源文件绝对路径
-     * @param destDir
-     *            目标文件所在目录
      * @return boolean
      */
     public static boolean copyFile(String srcPath, String destPath) {
