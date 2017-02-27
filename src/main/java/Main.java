@@ -3,33 +3,65 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.FileOutputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by me on 2017/2/26.
  */
 public class Main {
+
     static String[] titles = {"月","日","字","号","摘要","借方金额","贷方金额","对方科目"};
     static String[] outputTitles = {"日期","记账凭证","摘要","借方金额","贷方金额","对方科目"};
+
     public static void main(String[] args) throws Exception {
-        String path = "doc/原表.xlsx";
+        Scanner in = new Scanner(System.in);
+
+        System.out.println("请输入需要处理的文件路径（例如：F:\\\\xg\\\\kaidigao\\\\doc\\\\示例.xls）：");
+//        String path = in.nextLine();
+        String path = "F:\\xg\\kaidigao\\doc\\示例.xls";
+
+        System.out.println("请输入需要处理的 sheet 的编号，从1开始，以空格间隔（例如：1 2 3）：");
+        String sheetStr = in.nextLine();
+        sheetStr = sheetStr.trim();
+        String[] strs = sheetStr.split(" ");
+        int[] sheetIndexes = new int[strs.length];
+        for (int i = 0; i < sheetIndexes.length; i++) {
+            sheetIndexes[0] = Integer.valueOf(strs[i]) - 1;
+        }
+
 //        backUpOriginFile(path);
-        func(path);
+        func(path, sheetIndexes);
     }
 
     public static void backUpOriginFile(String path) {
         Utils.copyFile(path, "doc/备份-示例1.xlsx");
     }
 
-    public static void func(String path) throws Exception {
+    public static void initGUI() {
+        //实例化一个JFrame类的对象
+        javax.swing.JFrame jf = new javax.swing.JFrame();
+        //设置窗体的标题属性
+        jf.setTitle("开底稿");
+        //设置窗体的大小属性
+        jf.setSize(250,350);
+        //设置窗体的位置属性
+        jf.setLocation(400,200);
+        //设置窗体关闭时退出程序
+        jf.setDefaultCloseOperation(3);
+        //设置禁止调整窗体的大小
+        jf.setResizable(false);
+        //设置窗体是否可见
+        jf.setVisible(true);
+    }
+
+    public static void func(String path, int[] sheetIndexes) throws Exception {
         Workbook book = new XSSFWorkbook(path);
 
-        for (int sheetIndex = 0; sheetIndex < 5; sheetIndex++) {
+        for (int sheetIndex : sheetIndexes) {
 
             Sheet defaultSheet = book.getSheetAt(sheetIndex);
+
+            System.out.println("处理编号为：" + sheetIndex + "的sheet, sheet名为：" + defaultSheet.getSheetName());
 
             // 查找表头所在 Cell
             HashMap<String, Cell> titleCells = new HashMap<>();
@@ -44,7 +76,9 @@ public class Main {
                 }
             }
 
-            double minMoney = 10000; // FIXME
+            Scanner in = new Scanner(System.in);
+            System.out.println("请输入金额阈值，小于该值将被过滤（例如：1000）：");
+            double minMoney = in.nextDouble();
 
             // 遍历sheet，查找符合条件的row
             List<Map<String, Cell>> valids = new ArrayList<>();
@@ -53,6 +87,9 @@ public class Main {
                         >= minMoney ||
                         defaultSheet.getRow(row).getCell(titleCells.get("贷方金额").getColumnIndex()).getNumericCellValue()
                                 >= minMoney) {
+                    if (defaultSheet.getRow(row).getCell(titleCells.get("摘要").getColumnIndex()).getStringCellValue().equals("结转损益")) {
+                        continue;
+                    }
                     Map<String, Cell> tmp = new HashMap<>();
                     for (String title : titles) {
                         tmp.put(title, defaultSheet.getRow(row).getCell(titleCells.get(title).getColumnIndex()));
@@ -70,6 +107,36 @@ public class Main {
             for (int i = 0; i < outputTitles.length; i++) {
                 headRow.createCell(i).setCellValue(outputTitles[i]);
                 outputColIndex.put(outputTitles[i], i);
+            }
+
+
+            // 截取部分条目: number
+            System.out.println("保留金额最大的n条记录，请输入n值，（例如：20）：");
+            int number = in.nextInt();
+
+            double thred = 0;
+            if (valids.size() > number) {
+                List<Double> moneys = new ArrayList<>();
+                for (Map<String, Cell> tmp : valids) {
+                    moneys.add(tmp.get("借方金额").getNumericCellValue());
+                    moneys.add(tmp.get("贷方金额").getNumericCellValue());
+                }
+                Collections.sort(moneys, new Comparator<Double>() {
+                    @Override
+                    public int compare(Double o1, Double o2) {
+                        if (o1 > o2) return -1;
+                        if (o1 < o2) return 1;
+                        return 0;
+                    }
+                });
+                thred = moneys.get(number - 1);
+                List<Map<String, Cell>> filtered = new ArrayList<>();
+                for (Map<String, Cell> tmp : valids) {
+                    if (tmp.get("借方金额").getNumericCellValue() >= thred || tmp.get("贷方金额").getNumericCellValue() >= thred) {
+                        filtered.add(tmp);
+                    }
+                }
+                valids = filtered;
             }
 
             // 日期格式
@@ -111,8 +178,9 @@ public class Main {
         }
 
         // 保存文件
-        OutputStream out = new FileOutputStream("doc/原表-已处理.xlsx");
+        OutputStream out = new FileOutputStream(path + "A");
         book.write(out);
+        System.out.println("完成！");
     }
 
     public static Cell findCell(Sheet sheet, String title) {
